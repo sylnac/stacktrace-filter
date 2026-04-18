@@ -1,43 +1,40 @@
-"""Formatter module: renders parsed Traceback objects into annotated, collapsed output."""
+"""Format parsed tracebacks for terminal or plain-text output."""
 
-from dataclasses import dataclass
-from typing import List
+from __future__ import annotations
 
-from .parser import Traceback, Frame, is_stdlib, is_site_packages
+from dataclasses import dataclass, field
+from typing import Optional
 
-ANSI_RED = "\033[31m"
-ANSI_YELLOW = "\033[33m"
-ANSI_DIM = "\033[2m"
-ANSI_BOLD = "\033[1m"
-ANSI_RESET = "\033[0m"
+from .parser import Frame, Traceback, is_stdlib, is_site_packages
+from .annotator import annotate
 
 
 @dataclass
 class FormatOptions:
-    color: bool = True
     collapse_stdlib: bool = True
     collapse_site_packages: bool = False
-    max_collapsed_label: int = 3
+    color: bool = True
+    show_hints: bool = True
 
 
-def _label(frame: Frame) -> str:
-    if is_stdlib(frame):
-        return "stdlib"
-    if is_site_packages(frame):
-        return "site-packages"
-    return "app"
+def _label(text: str, color: bool) -> str:
+    return f"\033[1;34m{text}\033[0m" if color else text
 
 
-def _dim(text: str, opts: FormatOptions) -> str:
-    return f"{ANSI_DIM}{text}{ANSI_RESET}" if opts.color else text
+def _dim(text: str, color: bool) -> str:
+    return f"\033[2m{text}\033[0m" if color else text
 
 
-def _bold(text: str, opts: FormatOptions) -> str:
-    return f"{ANSI_BOLD}{text}{ANSI_RESET}" if opts.color else text
+def _bold(text: str, color: bool) -> str:
+    return f"\033[1m{text}\033[0m" if color else text
 
 
-def _red(text: str, opts: FormatOptions) -> str:
-    return f"{ANSI_RED}{text}{ANSI_RESET}" if opts.color else text
+def _red(text: str, color: bool) -> str:
+    return f"\033[31m{text}\033[0m" if color else text
+
+
+def _yellow(text: str, color: bool) -> str:
+    return f"\033[33m{text}\033[0m" if color else text
 
 
 def _should_collapse(frame: Frame, opts: FormatOptions) -> bool:
@@ -48,41 +45,35 @@ def _should_collapse(frame: Frame, opts: FormatOptions) -> bool:
     return False
 
 
-def format_traceback(tb: Traceback, opts: FormatOptions | None = None) -> str:
+def format_traceback(tb: Traceback, opts: Optional[FormatOptions] = None) -> str:
     if opts is None:
         opts = FormatOptions()
 
-    lines: List[str] = []
-    lines.append(_bold("Traceback (most recent call last):", opts))
+    lines: list[str] = []
+    lines.append(_label("Traceback (most recent call last):", opts.color))
 
-    i = 0
-    frames = tb.frames
-    while i < len(frames):
-        frame = frames[i]
+    collapsed = 0
+    for frame in tb.frames:
         if _should_collapse(frame, opts):
-            group = []
-            while i < len(frames) and _should_collapse(frames[i], opts):
-                group.append(frames[i])
-                i += 1
-            tag = _label(group[0])
-            count = len(group)
-            summary = f"  [{count} {tag} frame{'s' if count != 1 else ''} collapsed]"
-            lines.append(_dim(summary, opts))
-        else:
-            loc = f"  File \"{frame.filename}\", line {frame.lineno}, in {frame.name}"
-            lines.append(loc)
-            if frame.line:
-                lines.append(f"    {frame.line}")
-            i += 1
+            collapsed += 1
+            continue
+        if collapsed:
+            lines.append(_dim(f"  ... {collapsed} frame(s) from stdlib/site-packages collapsed ...", opts.color))
+            collapsed = 0
+        loc = f"  File \"{frame.filename}\", line {frame.lineno}, in {frame.module}"
+        lines.append(loc)
+        if frame.context:
+            lines.append(f"    {frame.context}")
 
-    exc_line = tb.exc_type
-    if tb.exc_message:
-        exc_line += f": {tb.exc_message}"
-    lines.append(_red(exc_line, opts))
+    if collapsed:
+        lines.append(_dim(f"  ... {collapsed} frame(s) from stdlib/site-packages collapsed ...", opts.color))
 
-    if tb.origin:
-        origin = tb.origin
-        note = f"  ^ origin: {origin.filename}:{origin.lineno} in {origin.name}"
-        lines.append(_dim(note, opts))
+    exc_line = _red(f"{tb.exc_type}: {tb.exc_message}", opts.color)
+    lines.append(_bold(exc_line, opts.color))
+
+    if opts.show_hints:
+        hint = annotate(tb)
+        if hint:
+            lines.append(_yellow(f"  Hint: {hint}", opts.color))
 
     return "\n".join(lines)
