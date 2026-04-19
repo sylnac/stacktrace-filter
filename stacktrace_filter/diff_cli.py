@@ -27,20 +27,28 @@ def build_diff_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _read_file(path: Path) -> str | None:
+    """Read text from *path*, printing an error and returning None on failure."""
+    try:
+        return path.read_text()
+    except FileNotFoundError:
+        print(f"error: file not found: {path}", file=sys.stderr)
+        return None
+    except OSError as exc:
+        print(f"error: could not read {path}: {exc}", file=sys.stderr)
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_diff_parser()
     args = parser.parse_args(argv)
 
-    try:
-        left_text = args.left.read_text()
-    except FileNotFoundError:
-        print(f"error: file not found: {args.left}", file=sys.stderr)
+    left_text = _read_file(args.left)
+    if left_text is None:
         return 2
 
-    try:
-        right_text = args.right.read_text()
-    except FileNotFoundError:
-        print(f"error: file not found: {args.right}", file=sys.stderr)
+    right_text = _read_file(args.right)
+    if right_text is None:
         return 2
 
     left_tbs = parse(left_text)
