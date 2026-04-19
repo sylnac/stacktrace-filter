@@ -13,6 +13,13 @@ def _bold(text: str) -> str:
     return f"\x1b[1m{text}\x1b[0m"
 
 
+def _format_label(text: str, *, no_color: bool, bold: bool = False) -> str:
+    """Apply optional ANSI formatting to a label string."""
+    if no_color:
+        return text
+    return _bold(text) if bold else _dim(text)
+
+
 def render_replay_header(snapshot_path: Path, *, no_color: bool = False) -> str:
     """Return a header line describing the replay source."""
     ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -24,7 +31,8 @@ def render_replay_header(snapshot_path: Path, *, no_color: bool = False) -> str:
 
 def render_replay_footer(tb_count: int, *, no_color: bool = False) -> str:
     """Return a summary footer line for a replay run."""
-    label = f"{tb_count} traceback(s) replayed."
+    noun = "traceback" if tb_count == 1 else "tracebacks"
+    label = f"{tb_count} {noun} replayed."
     if no_color:
         return label + "\n"
     return _dim(label) + "\n"
