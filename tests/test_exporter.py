@@ -52,6 +52,13 @@ def test_export_json_hints(tb):
     assert data[0]["hints"] == ["some hint"]
 
 
+def test_export_json_no_hints_key_when_absent(tb):
+    """Tracebacks without hints should not include a 'hints' key in JSON output."""
+    raw = export_json([tb])
+    data = json.loads(raw)
+    assert "hints" not in data[0]
+
+
 def test_export_markdown_header(tb):
     out = export_markdown([tb])
     assert "## `ZeroDivisionError`" in out
@@ -85,3 +92,10 @@ def test_export_dispatch_text_default(tb):
     opts = ExportOptions(fmt="text")
     out = export([tb], opts)
     assert "ZeroDivisionError" in out
+
+
+def test_export_dispatch_invalid_format(tb):
+    """Passing an unsupported format should raise a ValueError."""
+    opts = ExportOptions(fmt="xml")
+    with pytest.raises(ValueError, match="xml"):
+        export([tb], opts)
