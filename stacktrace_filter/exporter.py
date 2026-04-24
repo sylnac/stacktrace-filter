@@ -77,6 +77,25 @@ def export_text(tracebacks: List[Traceback], hints_map: dict | None = None) -> s
 
 
 def export(tracebacks: List[Traceback], options: ExportOptions, hints_map: dict | None = None) -> str:
+    """Export tracebacks using the given options.
+
+    Args:
+        tracebacks: List of parsed Traceback objects to export.
+        options: ExportOptions controlling format and output behaviour.
+        hints_map: Optional mapping of traceback index to a list of hint strings.
+
+    Returns:
+        A formatted string in the requested output format.
+
+    Raises:
+        ValueError: If ``options.fmt`` is not a recognised format.
+    """
+    _SUPPORTED_FORMATS = ("text", "json", "markdown")
+    if options.fmt not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported export format {options.fmt!r}. "
+            f"Choose one of: {', '.join(_SUPPORTED_FORMATS)}"
+        )
     if options.fmt == "json":
         return export_json(tracebacks, hints_map)
     if options.fmt == "markdown":
