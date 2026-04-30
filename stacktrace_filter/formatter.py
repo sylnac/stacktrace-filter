@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .parser import Frame, Traceback, is_stdlib, is_site_packages
@@ -15,6 +15,7 @@ class FormatOptions:
     collapse_site_packages: bool = False
     color: bool = True
     show_hints: bool = True
+    show_locals: bool = False
 
 
 def _label(text: str, color: bool) -> str:
@@ -62,14 +63,21 @@ def format_traceback(tb: Traceback, opts: Optional[FormatOptions] = None) -> str
             collapsed = 0
         loc = f"  File \"{frame.filename}\", line {frame.lineno}, in {frame.module}"
         lines.append(loc)
-        if frame.context:
-            lines.append(f"    {frame.context}")
+        if frame.code:
+            lines.append(f"    {frame.code}")
+        if opts.show_locals and frame.locals:
+            lines.append("    Local variables:")
+            for key, value in frame.locals.items():
+                lines.append(f"      {key} = {value}")
 
     if collapsed:
         lines.append(_dim(f"  ... {collapsed} frame(s) from stdlib/site-packages collapsed ...", opts.color))
 
     exc_line = _red(f"{tb.exc_type}: {tb.exc_message}", opts.color)
     lines.append(_bold(exc_line, opts.color))
+
+    if tb.origin is not None:
+        lines.append(_dim(f"  origin: {tb.origin.filename}:{tb.origin.lineno} in {tb.origin.module}", opts.color))
 
     if opts.show_hints:
         hint = annotate(tb)

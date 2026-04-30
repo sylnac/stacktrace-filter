@@ -18,6 +18,16 @@ SAMPLE_TRACEBACK = textwrap.dedent("""\
     ValueError: bad input
 """)
 
+TRACEBACK_WITH_LOCALS = textwrap.dedent("""\
+    Traceback (most recent call last):
+      File "app/main.py", line 10, in run
+        raise RuntimeError("boom")
+        Local variables:
+          api_key = ghp_fakeSecret123
+          user = user@example.com
+    RuntimeError: token=fakeToken
+""")
+
 
 @pytest.fixture()
 def log_file(tmp_path):
@@ -64,3 +74,15 @@ def test_no_traceback_passthrough(tmp_path, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "everything is fine" in out
+
+
+def test_redact_masks_local_variables_and_exception_text(capsys):
+    with patch("sys.stdin") as mock_stdin:
+        mock_stdin.read.return_value = TRACEBACK_WITH_LOCALS
+        rc = main(["--no-color", "--show-locals", "--redact"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ghp_fakeSecret123" not in out
+    assert "fakeToken" not in out
+    assert "user@example.com" not in out
+    assert "<redacted>" in out

@@ -3,15 +3,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, List
 
-from stacktrace_filter.parser import Traceback, Frame
+from stacktrace_filter.parser import Frame, Traceback
 
 _BUILTIN_PATTERNS: List[str] = [
     r"(?i)(password|passwd|secret|token|api[_-]?key)\s*=\s*\S+",
-    r"(?i)(authorization:\s*)\S+",
+    r"(?i)(authorization:\s*)\S+(?:\s+\S+)?",
     r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b",
 ]
+_SECRET_NAME_RE = re.compile(r"(?i)(password|passwd|secret|token|api[_-]?key)")
 
 REDACTED = "<redacted>"
 
@@ -33,25 +34,29 @@ def _redact_text(text: str, compiled: List[re.Pattern]) -> str:
     return text
 
 
+def _redact_local(name: str, value: Any, compiled: List[re.Pattern]) -> str:
+    value_text = str(value)
+    if _SECRET_NAME_RE.search(name):
+        return REDACTED
+    return _redact_text(value_text, compiled)
+
+
 def _redact_frame(frame: Frame, compiled: List[re.Pattern], redact_locals: bool) -> Frame:
-    new_context = (
-        [_redact_text(line, compiled) for line in frame.context]
-        if frame.context
-        else frame.context
-    )
-    new_locals: dict | None = None
+    new_code = _redact_text(frame.code, compiled) if frame.code is not None else None
+    new_locals: dict[str, Any] | None = None
     if frame.locals is not None:
         if redact_locals:
             new_locals = {
-                k: _redact_text(str(v), compiled) for k, v in frame.locals.items()
+                key: _redact_local(key, value, compiled)
+                for key, value in frame.locals.items()
             }
         else:
-            new_locals = frame.locals
+            new_locals = dict(frame.locals)
     return Frame(
-        filename=frame.filename,
+        path=frame.path,
         lineno=frame.lineno,
-        name=frame.name,
-        context=new_context,
+        func=frame.func,
+        code=new_code,
         locals=new_locals,
     )
 
@@ -66,5 +71,5 @@ def redact(tb: Traceback, config: RedactorConfig | None = None) -> Traceback:
     return Traceback(
         frames=new_frames,
         exc_type=tb.exc_type,
-        exc_value=new_exc_value,
+        exc_msg=new_exc_value,
     )
