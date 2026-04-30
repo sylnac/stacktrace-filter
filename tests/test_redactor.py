@@ -1,7 +1,6 @@
 """Tests for stacktrace_filter.redactor."""
-import pytest
 from stacktrace_filter.parser import Frame, Traceback
-from stacktrace_filter.redactor import RedactorConfig, redact, REDACTED
+from stacktrace_filter.redactor import RedactorConfig, REDACTED, redact
 
 
 def _frame(context: list[str] | None = None, locals_: dict | None = None) -> Frame:
@@ -43,16 +42,24 @@ def test_redact_email_in_context():
 
 
 def test_redact_locals_by_default():
-    frame = _frame(locals_={"api_key": "supersecret"})
+    frame = _frame(locals_={"api_key": "ghp_fakeSecret123"})
     result = redact(_tb(frames=[frame]))
-    assert "supersecret" not in result.frames[0].locals["api_key"]
+    assert result.frames[0].locals["api_key"] == REDACTED
+    assert "ghp_fakeSecret123" not in result.frames[0].locals["api_key"]
+
+
+def test_redact_local_value_by_pattern():
+    frame = _frame(locals_={"header": "authorization: Bearer fake-token"})
+    result = redact(_tb(frames=[frame]))
+    assert "fake-token" not in result.frames[0].locals["header"]
+    assert REDACTED in result.frames[0].locals["header"]
 
 
 def test_no_redact_locals_when_disabled():
-    frame = _frame(locals_={"api_key": "supersecret"})
+    frame = _frame(locals_={"api_key": "ghp_fakeSecret123"})
     config = RedactorConfig(redact_locals=False)
     result = redact(_tb(frames=[frame]), config)
-    assert result.frames[0].locals["api_key"] == "supersecret"
+    assert result.frames[0].locals["api_key"] == "ghp_fakeSecret123"
 
 
 def test_extra_pattern_redacted():
